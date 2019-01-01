@@ -14,6 +14,7 @@ function DieTrace($Msg){
 
 define('ADODB_ASSOC_CASE',0);
 $ADODB_FETCH_MODE = ADODB_FETCH_ASSOC;
+/** @var ADOConnection $db */
 $db = ADONewConnection("mssqlnative");  // create a connection
 $db->Connect('127.0.0.1','adodb','natsoft','northwind') or die('Fail');
 
@@ -107,13 +108,34 @@ function TestSQLDate()
       DieTrace(sprintf("ERROR : Expected for '%s' is '%s', but got '%s'",$k,$v,$res[$k]));
 } //TestSQLDate()
 
+
+//==========================
+// This code tests TestGetRow
+//==========================
+function TestGetRow() {
+  global $db;
+  $PrevDebug=$db->debug;  $db->debug=false; // Hide debug if present as Drop can cause errors
+  // Generate a table with big rows.
+  $db->Execute("drop table testgetrow;");
+  $db->Execute("create table testgetrow (id int PRIMARY KEY ,textdata VARCHAR(max));");
+  for($i=1;$i<=1000;$i++)
+    $db->Execute("insert into testgetrow values($i,'".str_repeat ( 'abcdefghij',$i*20)."');");
+  $db->debug=$PrevDebug; // Restore debug Initial State
+  // Get the first row on a big query, but due to table size and cartesian product cause a page lock
+  // And as the cursor is not correctly closed and query not fetched (works fine if getall instead), lock is active
+  $l=$db->GetRow("select a.* from testgetrow a,testgetrow b order by 1 desc");
+  // Deadlock here
+  $db->Execute("update testgetrow set textdata='".str_repeat ( 'abcdefghij',200)."' where id=1000");
+  } //TestGetRow()
+
+
 //==========================
 // This code is the tests RUNNER
 //==========================
 $db->debug=true;
 // $ToTest Contains * or the name of the test function to RUN
 $ToTest="*";
-//$ToTest="TestSQLDate";
+//$ToTest="TestGetRow";
 
 // Here the generic test runner, will launch all functions of the current file beginning by "test", should not be changed use $ToTest
 $functions = get_defined_functions();
